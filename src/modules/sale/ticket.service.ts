@@ -18,7 +18,7 @@ export class TicketService {
       // --- CONTENIDO DEL TICKET ---
       doc.font('Helvetica-Bold').fontSize(12).text('POS SYSTEM v2', { align: 'center' });
       doc.font('Helvetica').fontSize(8).text('RUC: 20600000000', { align: 'center' });
-      doc.text('AV. PRINCIPAL 123 - LIMA', { align: 'center' });
+      doc.text('Av.Mariscal Benavides 713 -San Vicente de Cañete, San Vicente de Cañete, Peru', { align: 'center' });
       doc.moveDown();
 
       doc.fontSize(9).font('Helvetica-Bold').text(`${sale.receiptType}: ${sale.receiptNumber}`);

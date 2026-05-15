@@ -13,12 +13,12 @@ export class AuthEmailResend {
 
         try {
             const emailContent = baseEmailTemplate({
-                title: "Bienvenido a GoPhone",
+                title: "Bienvenido a S&C Mobile",
                 content: `<p>Hola ${name},</p>
-                          <p>Gracias por registrarte en GoPhone. Estamos emocionados de tenerte con nosotros.</p>
+                          <p>Gracias por registrarte en S&C Mobile. Estamos emocionados de tenerte con nosotros.</p>
                           <p>Si tienes alguna pregunta, no dudes en contactarnos.</p>
                           <p>Saludos,</p>
-                          <p>El equipo de GoPhone</p>`
+                          <p>El equipo de S&C Mobile</p>`
             });
 
             const response = await resend.emails.send({

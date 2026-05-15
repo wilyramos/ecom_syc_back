@@ -9,7 +9,7 @@ const COMPANY = {
     ruc: "1072516715",
     direccion: "Jr. Bernardo O'Higgins 120",
     city: "Cañete, Lima - Perú",
-    telefono: "925054636",
+    telefono: "972416683",
     email: "ventas@gophone.pe",
 };
 
