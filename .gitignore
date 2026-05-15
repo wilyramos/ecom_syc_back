@@ -1,0 +1,14 @@
+# Node modules
+node_modules/
+
+# Environment variables
+.env
+
+# Build directories
+dist/
+build/
+
+# IDE files
+.vscode/goo
+
+coverage/
