@@ -12,6 +12,63 @@ import mongoose from 'mongoose';
 import sharp from 'sharp';
 import Line from '../models/ProductLine';
 import { getCategoryFamilyIds } from '../services/category.service';
+import Collection from '../modules/collection/collection.model';
+import ProductLine from '../models/ProductLine';
+
+
+const CATALOG_FACET = {
+    totalCount: [{ $count: 'count' }],
+    brands: [
+        { $group: { _id: "$brand" } },
+        { $match: { _id: { $ne: null } } },
+        { $lookup: { from: "brands", localField: "_id", foreignField: "_id", as: "b" } },
+        { $unwind: "$b" },
+        { $project: { id: { $toString: "$b._id" }, nombre: "$b.nombre", slug: "$b.slug" } },
+        { $sort: { nombre: 1 } }
+    ],
+    lines: [
+        { $match: { line: { $exists: true, $ne: null } } },
+        { $group: { _id: "$line" } },
+        { $addFields: { lObj: { $toObjectId: "$_id" } } },
+        { $lookup: { from: "productlines", localField: "lObj", foreignField: "_id", as: "l" } },
+        { $unwind: { path: "$l", preserveNullAndEmptyArrays: false } },
+        { $project: { id: { $toString: "$l._id" }, nombre: "$l.nombre", slug: "$l.slug" } },
+        { $sort: { nombre: 1 } }
+    ],
+    categories: [
+        { $group: { _id: "$categoria" } },
+        { $match: { _id: { $ne: null } } },
+        { $lookup: { from: "categories", localField: "_id", foreignField: "_id", as: "c" } },
+        { $unwind: "$c" },
+        { $project: { id: { $toString: "$c._id" }, nombre: "$c.nombre", slug: "$c.slug" } },
+        { $sort: { nombre: 1 } }
+    ],
+    atributos: [
+        {
+            $project: {
+                allAttrs: {
+                    $concatArrays: [
+                        { $objectToArray: { $ifNull: ["$atributos", {}] } },
+                        {
+                            $reduce: {
+                                input: { $ifNull: ["$variants", []] },
+                                initialValue: [],
+                                in: { $concatArrays: ["$$value", { $objectToArray: { $ifNull: ["$$this.atributos", {}] } }] }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        { $unwind: "$allAttrs" },
+        { $group: { _id: "$allAttrs.k", values: { $addToSet: "$allAttrs.v" } } },
+        { $project: { name: "$_id", values: 1, _id: 0 } },
+        { $sort: { name: 1 } }
+    ],
+    priceRangeFacet: [
+        { $group: { _id: null, min: { $min: "$precio" }, max: { $max: "$precio" } } }
+    ]
+};
 
 export class ProductController {
     static async createProduct(req: Request, res: Response) {
@@ -2152,7 +2209,6 @@ export class ProductController {
     }
 
     // CONTROLADOR DE NOVEDADES (New Arrivals)
-    // CONTROLADOR DE NOVEDADES (New Arrivals)
     static async getNewArrivals(req: Request, res: Response) {
         try {
             const { page, limit, sort, priceRange, ...attributeFilters } = req.query as any;
@@ -2329,4 +2385,164 @@ export class ProductController {
         }
     }
 
+
+    // En tu ProductController.ts
+
+    static async getCatalogByCollectionSlug(req: Request, res: Response) {
+        try {
+            const { slug } = req.params;
+            const { page, limit, sort, priceRange, query, ...attributeFilters } = req.query as any;
+
+            const collection = await Collection.findOne({ slug, isActive: true });
+            if (!collection) {
+                res.status(404).json({ message: 'Colección no encontrada' });
+                return;
+            }
+
+            const pageNum = Math.max(1, parseInt(page || "1", 10));
+            const limitNum = Math.max(1, parseInt(limit || "24", 10));
+            const skip = (pageNum - 1) * limitNum;
+
+            const pipeline: any[] = [];
+
+            // A. SEARCH (Atlas Search — debe ser la primera etapa si existe)
+            if (query && query.trim() !== "") {
+                pipeline.push({
+                    $search: {
+                        index: "ecommerce_search_products",
+                        compound: {
+                            should: [
+                                { text: { query, path: "nombre", score: { boost: { value: 3 } }, fuzzy: { maxEdits: 1 } } },
+                                { text: { query, path: "variants.nombre", score: { boost: { value: 2 } }, fuzzy: { maxEdits: 1 } } },
+                                { text: { query, path: "descripcion", fuzzy: { maxEdits: 1 } } },
+                            ],
+                            minimumShouldMatch: 1,
+                        },
+                    },
+                });
+            }
+
+            // B. MATCH — se declara PRIMERO, luego se enriquece
+            const matchStage: any = { isActive: true, collections: collection._id };
+
+            // Filtro de precio
+            if (priceRange) {
+                const [min, max] = priceRange.split('-').map(Number);
+                if (!isNaN(min) && !isNaN(max)) {
+                    matchStage.$or = [
+                        { precio: { $gte: min, $lte: max } },
+                        { "variants.precio": { $gte: min, $lte: max } },
+                    ];
+                }
+            }
+
+            // Filtros de categoría, marca y línea como query params
+            // (vienen de CollectionSidebar como ?categoria=slug&brand=slug&line=slug)
+            if (attributeFilters.categoria) {
+                const cat = await Category.findOne({ slug: attributeFilters.categoria }).select("_id").lean();
+                if (cat) matchStage.categoria = cat._id;
+                delete attributeFilters.categoria;
+            }
+
+            if (attributeFilters.brand) {
+                const brand = await Brand.findOne({ slug: attributeFilters.brand }).select("_id").lean();
+                if (brand) matchStage.brand = brand._id;
+                delete attributeFilters.brand;
+            }
+
+            if (attributeFilters.line) {
+                const line = await ProductLine.findOne({ slug: attributeFilters.line }).select("_id").lean();
+                if (line) matchStage.line = line._id.toString();
+                delete attributeFilters.line;
+            }
+
+            // Filtros de atributos dinámicos (color, almacenamiento, etc.)
+            const reservedKeys = ['limit', 'page', 'sort', 'priceRange', 'query'];
+            const attrConditions: any[] = [];
+
+            Object.keys(attributeFilters).forEach((key) => {
+                if (reservedKeys.includes(key)) return;
+                const values = Array.isArray(attributeFilters[key])
+                    ? attributeFilters[key]
+                    : [attributeFilters[key]];
+                if (values.length > 0) {
+                    attrConditions.push({
+                        $or: [
+                            { [`atributos.${key}`]: { $in: values } },
+                            { variants: { $elemMatch: { [`atributos.${key}`]: { $in: values } } } },
+                        ],
+                    });
+                }
+            });
+
+            if (attrConditions.length > 0) matchStage.$and = attrConditions;
+
+            pipeline.push({ $match: matchStage });
+
+            // C. ORDENAMIENTO
+            let sortStage: any = { esDestacado: -1, createdAt: -1 };
+            if (sort === 'price-asc') sortStage = { precio: 1 };
+            if (sort === 'price-desc') sortStage = { precio: -1 };
+            if (query && query.trim() !== "") sortStage = { score: { $meta: "searchScore" } };
+
+            // D. FACETA
+            pipeline.push({
+                $facet: {
+                    ...CATALOG_FACET,
+                    products: [
+                        { $sort: sortStage },
+                        { $skip: skip },
+                        { $limit: limitNum },
+                        { $lookup: { from: 'brands', localField: 'brand', foreignField: '_id', as: 'brand' } },
+                        { $unwind: { path: '$brand', preserveNullAndEmptyArrays: true } },
+                        { $addFields: { lineObjectId: { $toObjectId: "$line" } } },
+                        { $lookup: { from: 'productlines', localField: 'lineObjectId', foreignField: '_id', as: 'line' } },
+                        { $unwind: { path: '$line', preserveNullAndEmptyArrays: true } },
+                        {
+                            $project: {
+                                nombre: 1, slug: 1, precio: 1, precioComparativo: 1,
+                                imagenes: 1, stock: 1, atributos: 1, variants: 1,
+                                brand: { nombre: 1, slug: 1 }, line: { nombre: 1, slug: 1 },
+                                categoria: 1, esDestacado: 1, esNuevo: 1, rating: 1, numReviews: 1,
+                            },
+                        },
+                    ],
+                },
+            });
+
+            const [data] = await Product.aggregate(pipeline);
+
+            res.status(200).json({
+                products: data.products,
+                pagination: {
+                    currentPage: pageNum,
+                    totalPages: Math.ceil((data.totalCount[0]?.count || 0) / limitNum) || 1,
+                    totalItems: data.totalCount[0]?.count || 0,
+                },
+                filters: {
+                    brands: data.brands || [],
+                    lines: data.lines || [],
+                    categories: data.categories || [],
+                    atributos: data.atributos || [],
+                    price: data.priceRangeFacet || [],
+                },
+                context: {
+                    categoryName: null,
+                    brandName: null,
+                    lineName: null,
+                    searchQuery: query || null,
+                    collectionName: collection.name,
+                    collectionDesc: collection.description ?? null,
+                    collectionImage: collection.image ?? null,
+                    collectionColor: collection.color ?? null,
+                    collectionIcon: collection.icon ?? null,
+                },
+                isFallback: false,
+            });
+
+        } catch (error: any) {
+            console.error("Error en getCatalogByCollectionSlug:", error);
+            res.status(500).json({ message: error.message });
+        }
+    }
 }

@@ -59,6 +59,7 @@ export interface IProduct extends Document {
     rating: number;
     numReviews: number;
     deletedAt?: Date;
+    collections?: Types.ObjectId[];
 }
 
 // --- Sub-schema de especificación ---
@@ -148,7 +149,14 @@ const productSchema = new Schema<IProduct>(
         metaDescription: { type: String, trim: true, maxlength: 160 },
         rating: { type: Number, min: 0, max: 5, default: 0 },
         numReviews: { type: Number, default: 0, min: 0 },
-        deletedAt: { type: Date, default: null }
+        deletedAt: { type: Date, default: null },
+        collections: [
+            {
+                type: Schema.Types.ObjectId,
+                ref: 'Collection',
+                default: []
+            }
+        ]
     },
 
     { timestamps: true }

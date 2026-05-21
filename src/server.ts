@@ -30,6 +30,7 @@ import reportRouter from './modules/reports/report.routes'
 import sliderBannerRouter from './modules/sliderbanner/sliderbanner.routes'
 
 import setupSwagger from './config/swagger.config'
+import collectionRouter from './modules/collection/collection.router'
 
 dotenv.config()
 
@@ -60,6 +61,7 @@ app.use('/api/sales/v2', saleRouterV2)
 app.use('/api/cash/v2', cashRouter)
 app.use('/api/reports/v2', reportRouter)
 app.use('/api/slider-banners', sliderBannerRouter)
+app.use('/api/collections', collectionRouter)
 
 // Routers
 app.use('/api/auth', authRouter)

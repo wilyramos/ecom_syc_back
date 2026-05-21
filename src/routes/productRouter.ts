@@ -148,6 +148,7 @@ router.get('/searchindex',
 router.get('/mainpage', ProductController.getProductsMainPage);
 
 router.get('/catalog/resolve', ProductController.getCatalogBySlugs);
+router.get('/collections/:slug/catalog', ProductController.getCatalogByCollectionSlug);
 
 router.get('/offers/all', 
 
