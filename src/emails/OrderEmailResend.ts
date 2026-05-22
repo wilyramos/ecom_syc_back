@@ -25,7 +25,7 @@ export class OrderEmail {
             <tr>
               <td style="padding:10px 0; border-bottom:1px solid #f0f0f0;">
                 <img 
-                  src="${item.imagen || "https://gophone.pe/logo.png"}"
+                  src="${item.imagen || "https://sycmobile.pe/logo.png"}"
                   alt="${item.nombre}"
                   style="width:55px; height:auto; border-radius:6px;"
                 />
@@ -85,14 +85,14 @@ export class OrderEmail {
             </p>
 
             <p style="margin-top:10px; font-size:14px;">
-              Gracias por elegir <strong>GoPhone</strong>
+              Gracias por elegir <strong>S&C Mobile</strong>
             </p>
           </div>
         `,
       });
 
       await resend.emails.send({
-        from: "GoPhone <contacto@gophone.pe>",
+        from: "S&C Mobile <contacto@sycmobile.pe>",
         to: email,
         subject: "Tu pedido ha sido confirmado 🛍️",
         html: emailContent,

@@ -5,12 +5,12 @@ import { IOrder } from "../models/Order";
 import { IUser } from "../models/User";
 
 const COMPANY = {
-    nombre: "GOPHONE",
+    nombre: "sycmobile",
     ruc: "1072516715",
-    direccion: "Jr. Bernardo O'Higgins 120",
+    direccion: "Av. Mariscal Benavides 713, San Vicente de Cañete",
     city: "Cañete, Lima - Perú",
     telefono: "972416683",
-    email: "ventas@gophone.pe",
+    email: "ventas@sycmobile.pe",
 };
 
 const COLORS = {

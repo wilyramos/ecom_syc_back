@@ -3,9 +3,9 @@ import { IOrder } from "../models/Order";
 import { IUser } from "../models/User";
 
 const COMPANY = {
-    nombre: "GOPHONE PERÚ",
-    direccion: "Jr. Bernardo O'Higgins 120, Cañete, Lima",
-    telefono: "925 054 636"
+    nombre: "SYCMOBILE PERÚ",
+    direccion: "Av. Mariscal Benavides 713, San Vicente de Cañete",
+    telefono: "972416683"
 };
 
 export const buildShippingLabel = (doc: PDFKit.PDFDocument, order: IOrder) => {

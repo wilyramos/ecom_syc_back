@@ -3,7 +3,7 @@ import PDFDocument from 'pdfkit';
 const COMPANY = {
     nombre: "GOPHONE",
     ruc: "1072516715",
-    direccion: "Jr. Bernardo O'Higgins 120",
+    direccion: "Av. Mariscal Benavides 713, San Vicente de Cañete",
     city: "Cañete, Lima - Perú",
     telefono: "972416683",
 };
@@ -154,7 +154,7 @@ export const generateSaleTicket = (sale: any): Promise<Buffer> => {
         }
         
         currentY += 15;
-        doc.font('Helvetica-Bold').fontSize(8).fillColor('#000000').text('www.gophone.pe', { align: 'center', width: contentWidth });
+        doc.font('Helvetica-Bold').fontSize(8).fillColor('#000000').text('www.sycmobile.pe', { align: 'center', width: contentWidth });
 
         doc.end();
     });

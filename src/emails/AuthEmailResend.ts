@@ -22,9 +22,9 @@ export class AuthEmailResend {
             });
 
             const response = await resend.emails.send({
-                from: 'GoPhone <contacto@gophone.pe>',
+                from: 'S&C Mobile <contacto@sycmobile.pe>',
                 to: email,
-                subject: 'Bienvenido a GoPhone',
+                subject: 'Bienvenido a S&C Mobile',
                 html: emailContent
             });
 
@@ -53,12 +53,12 @@ export class AuthEmailResend {
                 <p><a href="${resetLink}" style="color:#1a73e8;">Restablecer contraseña</a></p>
                 <p>Este enlace expirará en 15 minutos.</p>
                 <p>Si no realizaste esta solicitud, puedes ignorar este correo.</p>
-                <p>Saludos,<br/>El equipo de GoPhone</p>
+                <p>Saludos,<br/>El equipo de S&C Mobile</p>
             `
             });
 
             const response = await resend.emails.send({
-                from: 'GoPhone <contacto@gophone.pe>',
+                from: 'S&C Mobile <contacto@sycmobile.pe>',
                 to: email,
                 subject: 'Restablecimiento de contraseña',
                 html: emailContent
@@ -86,11 +86,11 @@ export class AuthEmailResend {
                           <p>Tu contraseña ha sido actualizada exitosamente.</p>
                           <p>Si no realizaste esta acción, por favor contacta a soporte.</p>
                           <p>Saludos,</p>
-                          <p>El equipo de GoPhone</p>`
+                          <p>El equipo de S&C Mobile</p>`
             });
 
             const response = await resend.emails.send({
-                from: 'GoPhone <contacto@gophone.pe>',
+                from: 'S&C Mobile <contacto@sycmobile.pe>',
                 to: email,
                 subject: 'Contraseña actualizada',
                 html: emailContent

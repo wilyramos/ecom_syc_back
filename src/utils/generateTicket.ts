@@ -3,7 +3,7 @@ import { ISale } from "../models/Sale";
 const COMPANY = {
     nombre: "GOPHONE",
     ruc: "1072516715",
-    direccion: "Jr. Bernardo Ohggins 120",
+    direccion: "Av. Mariscal Benavides 713, San Vicente de Cañete",
     city: "Cañete, Lima - Perú",
     telefono: "972416683",
 };
@@ -141,5 +141,5 @@ export const generateSalePDF = (doc: PDFKit.PDFDocument, sale: ISale, logoPath?:
     doc.font("Helvetica").text(formatCurrency(sale.totalPrice), resumeColValue, currentY + 60, { width: 105, align: "right" });
 
     // Mensaje Final
-    doc.font("Helvetica-Oblique").text("Gracias por confiar en GoPhone.", 50, currentY + 100, { align: "center", width: 495 });
+    doc.font("Helvetica-Oblique").text("Gracias por confiar en S&C Mobile.", 50, currentY + 100, { align: "center", width: 495 });
 };
