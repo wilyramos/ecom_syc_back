@@ -22,7 +22,7 @@ export class AuthEmailResend {
             });
 
             const response = await resend.emails.send({
-                from: 'S&C Mobile <contacto@sycmobile.pe>',
+                from: 'S&C Mobile <sycmobilecanete@gmail.com>',
                 to: email,
                 subject: 'Bienvenido a S&C Mobile',
                 html: emailContent
@@ -58,7 +58,7 @@ export class AuthEmailResend {
             });
 
             const response = await resend.emails.send({
-                from: 'S&C Mobile <contacto@sycmobile.pe>',
+                from: 'S&C Mobile <sycmobilecanete@gmail.com>',
                 to: email,
                 subject: 'Restablecimiento de contraseña',
                 html: emailContent
@@ -90,7 +90,7 @@ export class AuthEmailResend {
             });
 
             const response = await resend.emails.send({
-                from: 'S&C Mobile <contacto@sycmobile.pe>',
+                from: 'S&C Mobile <sycmobilecanete@gmail.com>',
                 to: email,
                 subject: 'Contraseña actualizada',
                 html: emailContent

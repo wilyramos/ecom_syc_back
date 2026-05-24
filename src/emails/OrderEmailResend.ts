@@ -92,7 +92,7 @@ export class OrderEmail {
       });
 
       await resend.emails.send({
-        from: "S&C Mobile <contacto@sycmobile.pe>",
+        from: "S&C Mobile <sycmobilecanete@gmail.com>",
         to: email,
         subject: "Tu pedido ha sido confirmado 🛍️",
         html: emailContent,
