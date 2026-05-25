@@ -1,16 +1,8 @@
-// File: backend/src/modules/sliderbanner/sliderbanner.controller.ts
-
 import { RequestHandler } from 'express';
 import { SliderBannerService, sliderBannerService } from './sliderbanner.service';
-import { SliderContentType } from './sliderbanner.model';
-import { AppError } from '../../utils/AppError';
-
-const VALID_CONTENT_TYPES: SliderContentType[] = [
-    'product', 'brand', 'category', 'campaign', 'custom',
-];
 
 export class SliderBannerController {
-    constructor(private readonly service: SliderBannerService) { }
+    constructor(private readonly service: SliderBannerService) {}
 
     // ── HELPERS ───────────────────────────────────────────────────────────────
 
@@ -23,17 +15,6 @@ export class SliderBannerController {
     private parsePositiveInt(value: unknown, fallback: number): number {
         const n = parseInt(value as string, 10);
         return Number.isFinite(n) && n > 0 ? n : fallback;
-    }
-
-    private parseContentType(value: unknown): SliderContentType | undefined {
-        if (typeof value !== 'string' || !value.trim()) return undefined;
-        if (!VALID_CONTENT_TYPES.includes(value as SliderContentType)) {
-            throw new AppError(
-                `contentType inválido. Valores permitidos: ${VALID_CONTENT_TYPES.join(', ')}`,
-                400,
-            );
-        }
-        return value as SliderContentType;
     }
 
     // ── PUBLIC (STOREFRONT) ───────────────────────────────────────────────────
@@ -51,14 +32,11 @@ export class SliderBannerController {
 
     getAll: RequestHandler = async (req, res, next) => {
         try {
-            const contentType = this.parseContentType(req.query.contentType);
-
             const result = await this.service.getAllForAdmin({
-                page: this.parsePositiveInt(req.query.page, 1),
-                limit: this.parsePositiveInt(req.query.limit, 10),
+                page:     this.parsePositiveInt(req.query.page, 1),
+                limit:    this.parsePositiveInt(req.query.limit, 10),
                 isActive: this.parseBoolean(req.query.isActive),
-                contentType,
-                search: req.query.search as string | undefined,
+                search:   req.query.search as string | undefined,
             });
 
             res.status(200).json({ success: true, ...result });

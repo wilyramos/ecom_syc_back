@@ -1,18 +1,15 @@
 // File: backend/src/modules/sliderbanner/sliderbanner.service.ts
 
-import { FilterQuery, Types, UpdateQuery } from 'mongoose';
+import { FilterQuery, Types } from 'mongoose';
 import SliderBanner, { ISliderBanner } from './sliderbanner.model';
 import { AppError } from '../../utils/AppError';
 
-// ─────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────
+// ─── TYPES ────────────────────────────────────────────────────────────────────
 
 export interface GetAllAdminDto {
     page?: number;
     limit?: number;
     isActive?: boolean;
-    contentType?: string;
     search?: string;
 }
 
@@ -31,20 +28,12 @@ export interface PaginatedResult<T> {
     };
 }
 
-const POPULATE_FIELDS = [
-    { path: 'product', select: 'nombre slug precio imagenes' },
-    { path: 'brand', select: 'nombre logo slug' },
-    { path: 'category', select: 'nombre slug' },
-];
-
-// ─────────────────────────────────────────────
-// SERVICE
-// ─────────────────────────────────────────────
+// ─── SERVICE ──────────────────────────────────────────────────────────────────
 
 export class SliderBannerService {
     private readonly model = SliderBanner;
 
-    // ── HELPERS ──────────────────────────────────────────────────────────────
+    // ── HELPERS ───────────────────────────────────────────────────────────────
 
     private assertId(id: string): void {
         if (!Types.ObjectId.isValid(id)) {
@@ -53,22 +42,10 @@ export class SliderBannerService {
     }
 
     private validate(data: Partial<ISliderBanner>, isUpdate = false): void {
-        // Campos requeridos solo en creación
-        if (!isUpdate) {
-            if (!data.destUrl) throw new AppError('destUrl es requerido', 400);
-            if (!data.media?.imageUrl) throw new AppError('media.imageUrl es requerido', 400);
-            if (!data.media?.altText) throw new AppError('media.altText es requerido', 400);
-        }
-
-        // Relaciones según contentType
-        if (data.contentType === 'product' && !data.product) throw new AppError('Producto requerido para contentType=product', 400);
-        if (data.contentType === 'brand' && !data.brand) throw new AppError('Marca requerida para contentType=brand', 400);
-        if (data.contentType === 'category' && !data.category) throw new AppError('Categoría requerida para contentType=category', 400);
-
-        // Precios: compare debe ser mayor que current
+        // Precio: compare debe ser mayor que current
         if (data.price?.current !== undefined && data.price?.compare !== undefined) {
-            if (data.price.compare < data.price.current) {
-                throw new AppError('El precio de comparación debe ser mayor al actual', 400);
+            if (data.price.compare <= data.price.current) {
+                throw new AppError('El precio de comparación debe ser mayor al precio actual', 400);
             }
         }
 
@@ -79,7 +56,7 @@ export class SliderBannerService {
             }
         }
 
-        // Countdown: endsAt debe ser una fecha futura (solo en creación)
+        // Countdown: endsAt debe ser una fecha futura (solo se valida al crear para no bloquear updates de banners expirados)
         if (!isUpdate && data.countdown?.endsAt) {
             if (new Date(data.countdown.endsAt) <= new Date()) {
                 throw new AppError('La fecha del countdown debe ser futura', 400);
@@ -104,8 +81,7 @@ export class SliderBannerService {
                 !Array.isArray(val) &&
                 !(val instanceof Date)
             ) {
-                const nested = this.sanitize(val);
-                clean[key] = nested;
+                clean[key] = this.sanitize(val);
             } else {
                 clean[key] = val;
             }
@@ -115,7 +91,7 @@ export class SliderBannerService {
     }
 
     /**
-     * Filtro para excluir banners fuera de su ventana de programación.
+     * Filtra banners fuera de su ventana de programación.
      */
     private scheduleFilter(): FilterQuery<ISliderBanner> {
         const now = new Date();
@@ -146,7 +122,6 @@ export class SliderBannerService {
             .find({ isActive: true, ...this.scheduleFilter() })
             .sort({ order: 1, createdAt: -1 })
             .limit(20)
-            .populate(POPULATE_FIELDS)
             .lean()
             .exec() as unknown as ISliderBanner[];
     }
@@ -154,18 +129,19 @@ export class SliderBannerService {
     // ── ADMIN ─────────────────────────────────────────────────────────────────
 
     async getAllForAdmin(dto: GetAllAdminDto = {}): Promise<PaginatedResult<ISliderBanner>> {
-        const { page = 1, limit = 10, isActive, contentType, search } = dto;
+        const { page = 1, limit = 10, isActive, search } = dto;
 
         const filter: FilterQuery<ISliderBanner> = {};
 
         if (typeof isActive === 'boolean') filter.isActive = isActive;
-        if (contentType) filter.contentType = contentType;
 
         if (search?.trim()) {
+            const regex = { $regex: search.trim(), $options: 'i' };
             filter.$or = [
-                { title: { $regex: search.trim(), $options: 'i' } },
-                { subtitle: { $regex: search.trim(), $options: 'i' } },
-                { description: { $regex: search.trim(), $options: 'i' } },
+                { name: regex },
+                { title: regex },
+                { subtitle: regex },
+                { tags: regex },
             ];
         }
 
@@ -175,7 +151,6 @@ export class SliderBannerService {
                 .sort({ order: 1, createdAt: -1 })
                 .skip((page - 1) * limit)
                 .limit(limit)
-                .populate(POPULATE_FIELDS)
                 .lean()
                 .exec(),
             this.model.countDocuments(filter),
@@ -195,21 +170,15 @@ export class SliderBannerService {
     async getById(id: string): Promise<ISliderBanner> {
         this.assertId(id);
 
-        const banner = await this.model
-            .findById(id)
-            .populate(POPULATE_FIELDS)
-            .lean()
-            .exec();
-
+        const banner = await this.model.findById(id).lean().exec();
         if (!banner) throw new AppError('Banner no encontrado', 404);
 
         return banner as unknown as ISliderBanner;
     }
 
     async create(data: Partial<ISliderBanner>): Promise<ISliderBanner> {
-        this.validate(data);
+        this.validate(data, false);
 
-        // Auto-asignar orden al final si no se especifica
         if (data.order === undefined) {
             const last = await this.model
                 .findOne()
@@ -229,14 +198,11 @@ export class SliderBannerService {
         const existing = await this.model.findById(id).lean();
         if (!existing) throw new AppError('Banner no encontrado', 404);
 
-        // Mezclar el estado actual con los cambios para validar el objeto completo
         const sanitized = this.sanitize(data as Record<string, any>);
-        const merged = { ...existing, ...sanitized } as Partial<ISliderBanner>;
-        this.validate(merged, true);
+        this.validate({ ...existing, ...sanitized } as Partial<ISliderBanner>, true);
 
         const updated = await this.model
             .findByIdAndUpdate(id, { $set: sanitized }, { new: true, runValidators: true })
-            .populate(POPULATE_FIELDS)
             .lean()
             .exec();
 
