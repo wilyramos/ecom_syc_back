@@ -1,8 +1,8 @@
 import { ISale } from "../models/Sale";
 
 const COMPANY = {
-    nombre: "GOPHONE",
-    ruc: "1072516715",
+    nombre: "S&C Mobile",
+    ruc: "1065326554",
     direccion: "Av. Mariscal Benavides 713, San Vicente de Cañete",
     city: "Cañete, Lima - Perú",
     telefono: "972416683",

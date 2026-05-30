@@ -1172,7 +1172,7 @@ export class ProductController {
 
     static async getProductsRelated(req: Request, res: Response) {
         const { slug } = req.params;
-        const LIMIT_TOTAL = 6; // Límite total de productos a mostrar
+        const LIMIT_TOTAL = 4; // Límite total de productos a mostrar
 
         try {
             // 1. Encontrar el producto base

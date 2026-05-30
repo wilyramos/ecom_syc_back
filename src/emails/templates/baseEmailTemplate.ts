@@ -21,7 +21,7 @@ export function baseEmailTemplate({ title, content }: EmailTemplateParams): stri
           ${content}
         </div>
         <div style="margin-top:30px; font-size:12px; text-align:center; color:#666;">
-          © ${new Date().getFullYear()} Gophone.pe<br/>
+          © ${new Date().getFullYear()} sycmobile.pe<br/>
           Este mensaje fue enviado automáticamente. No respondas a este correo.
         </div>
       </div>

@@ -18,7 +18,7 @@ export const buildShippingLabel = (doc: PDFKit.PDFDocument, order: IOrder) => {
     const marginX = 20;
     let currentY = 20;
 
-    // 1. ZONA DEL REMITENTE (Gophone) - Letra pequeña
+    // 1. ZONA DEL REMITENTE () - Letra pequeña
     doc.font("Helvetica-Bold").fontSize(10).text("REMITENTE:", marginX, currentY);
     doc.font("Helvetica").fontSize(9)
        .text(COMPANY.nombre, marginX, currentY + 12)
