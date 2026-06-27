@@ -1,54 +1,105 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
-// Atributos posibles para productos de esta categoría
 export interface ICategoryAttribute {
-    name: string;        // Ej: "Color", "Talla", "Material"
-    values: string[];    // Ej: ["Rojo", "Verde"] o ["S", "M", "L"]
-    isVariant?: boolean; // This indicates if the attribute is used for product variants
+    name: string;
+    values: string[];
+    isVariant?: boolean;
 }
 
 export interface ICategory extends Document {
     nombre: string;
     descripcion?: string;
     slug?: string;
-    parent?: Types.ObjectId; // Subcategoría (si aplica)
-    image?: string;          // Banner o icono de la categoría
-    isActive?: boolean;      // Control de visibilidad / soft delete
-    attributes?: ICategoryAttribute[]; // Atributos que serviran para los productos ademas de almacenar los filtros en la categoria
+    parent?: Types.ObjectId;
+    image?: string;
+    isActive?: boolean;
+    deletedAt?: Date;
+    order?: number;
+    attributes?: ICategoryAttribute[];
     createdAt?: Date;
     updatedAt?: Date;
 }
 
-// Subschema para atributos
 const categoryAttributeSchema = new Schema<ICategoryAttribute>(
     {
-        name: { type: String, required: true, trim: true },
-        values: [{ type: String, required: true, trim: true }],
-        isVariant: { type: Boolean, default: false },
+        name: {
+            type: String,
+            required: true,
+            trim: true,
+            lowercase: true
+        },
+        values: [{
+            type: String,
+            required: true,
+            trim: true,
+            lowercase: true
+        }],
+        isVariant: {
+            type: Boolean,
+            default: false
+        },
     },
     { _id: false }
 );
 
-// Esquema principal de categoría
 const categorySchema = new Schema<ICategory>(
     {
-        nombre: { type: String, required: true, unique: true, trim: true },
-        descripcion: { type: String, trim: true },
-        slug: { type: String, unique: true, trim: true },
-
+        nombre: {
+            type: String,
+            required: true,
+            trim: true,
+            // Removemos unique: true aquí, lo haremos con índice
+        },
+        descripcion: {
+            type: String,
+            trim: true
+        },
+        slug: {
+            type: String,
+            trim: true,
+            // Removemos unique: true aquí también
+        },
         parent: {
             type: Schema.Types.ObjectId,
             ref: 'Category',
-            default: null, // null si es categoría raíz
+            default: null,
         },
-
-        image: { type: String, trim: true },        // Nueva propiedad
-        isActive: { type: Boolean, default: true }, // Control de visibilidad
-
-        attributes: [categoryAttributeSchema], // Atributos informativos
+        image: {
+            type: String,
+            trim: true
+        },
+        isActive: {
+            type: Boolean,
+            default: true
+        },
+        order: {
+            type: Number,
+            default: 0
+        },
+        deletedAt: {
+            type: Date,
+            default: null,
+            index: true  // ← Importante para filtrar rápido
+        },
+        attributes: [categoryAttributeSchema],
     },
     { timestamps: true }
 );
+
+categorySchema.index(
+    { nombre: 1, deletedAt: 1 },
+    { sparse: true, unique: true }
+);
+categorySchema.index(
+    { slug: 1, deletedAt: 1 },
+    { sparse: true, unique: true }
+);
+
+// Queries frecuentes
+categorySchema.index({ parent: 1, deletedAt: 1 });
+categorySchema.index({ isActive: 1, deletedAt: 1 });
+categorySchema.index({ 'attributes.name': 1 });
+categorySchema.index({ order: 1, createdAt: -1 });
 
 const Category = mongoose.model<ICategory>('Category', categorySchema);
 export default Category;
