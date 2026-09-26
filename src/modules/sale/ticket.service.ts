@@ -37,13 +37,10 @@ export class TicketService {
   async generateTicketBuffer(sale: ISale): Promise<Buffer> {
     const isQuote = sale.isQuote || sale.status === SaleStatus.QUOTE;
 
-    // Encabezado institucional + datos cliente
-    const headerHeight = isQuote ? 170 : 165;
-    // Totales + subtotales + pie de página
-    const footerHeight = isQuote ? 140 : 135;
-    // 1 línea por producto + 1 si tiene variante
+    const headerHeight = isQuote ? 175 : 170;
+    const footerHeight = isQuote ? 160 : 155;
     const itemsLines = sale.items.reduce((acc, item) => acc + (item.variantId ? 2 : 1), 0);
-    const tableHeight = 28 + itemsLines * 18;
+    const tableHeight = 30 + itemsLines * 18;
     const totalHeight = Math.ceil(headerHeight + tableHeight + footerHeight);
 
     return new Promise((resolve, reject) => {
@@ -68,31 +65,31 @@ export class TicketService {
   }
 
   private renderSaleTicket(doc: PDFKit.PDFDocument, sale: ISale): void {
-    // 1. Encabezado de Empresa
+    // 1. Encabezado de Empresa (ancho total: 206)
     doc.fillColor('#000000', 1.0);
-    doc.font('Helvetica-Bold').fontSize(11).text(this.RAZON_SOCIAL, { align: 'center' });
+    doc.font('Helvetica-Bold').fontSize(11).text(this.RAZON_SOCIAL, 10, doc.y, { align: 'center', width: 206 });
     doc.moveDown(0.2);
-    doc.fontSize(8).text(`RUC: ${this.RUC}`, { align: 'center' });
-    doc.font('Helvetica').fontSize(7).text(this.DIRECCION, { align: 'center', width: 206 });
-    doc.text(this.TELEFONO, { align: 'center', width: 206 });
+    doc.fontSize(8).text(`RUC: ${this.RUC}`, 10, doc.y, { align: 'center', width: 206 });
+    doc.font('Helvetica').fontSize(7).text(this.DIRECCION, 10, doc.y, { align: 'center', width: 206 });
+    doc.text(this.TELEFONO, 10, doc.y, { align: 'center', width: 206 });
     doc.moveDown(0.4);
 
     this.drawDashedLine(doc);
 
-    // 2. Título de Comprobante y Número Correlativo
+    // 2. Título de Comprobante
     const docTitle = sale.receiptType ? sale.receiptType.toUpperCase() : 'TICKET DE VENTA';
-    doc.font('Helvetica-Bold').fontSize(9).text(`${docTitle}: ${sale.receiptNumber || '000000'}`, { align: 'center' });
+    doc.font('Helvetica-Bold').fontSize(9).text(`${docTitle}: ${sale.receiptNumber || '000000'}`, 10, doc.y, { align: 'center', width: 206 });
     doc.moveDown(0.3);
 
-    // 3. Metadatos de la Venta (Alineación con dos puntos uniformes)
+    // 3. Metadatos de la Venta
     doc.font('Helvetica').fontSize(7);
     this.renderKeyValue(doc, 'Fecha y Hora', formatPeruDateTime(sale.createdAt));
     this.renderKeyValue(doc, 'Cajero/Op.', (sale.employee as any)?.nombre || 'Cajero');
     this.renderKeyValue(doc, 'Método de Pago', sale.paymentMethod || 'EFECTIVO');
-    
+
     const clientName = sale.customerSnapshot?.nombre || 'CLIENTES VARIOS';
     this.renderKeyValue(doc, 'Cliente', clientName);
-    
+
     if (sale.customerSnapshot?.numeroDocumento) {
       const docType = sale.customerSnapshot.tipoDocumento || 'DOC';
       this.renderKeyValue(doc, docType, sale.customerSnapshot.numeroDocumento);
@@ -116,28 +113,43 @@ export class TicketService {
 
     doc.moveDown(0.2);
     this.renderTotalLine(doc, 'TOTAL A PAGAR', `S/ ${sale.totalPrice.toFixed(2)}`, true);
-    doc.moveDown(0.6);
+    doc.moveDown(0.4);
 
-    // 6. Mensaje de Despedida y Garantía
-    doc.font('Helvetica-Bold').fontSize(8).text('¡GRACIAS POR SU COMPRA!', { align: 'center' });
-    doc.moveDown(0.2);
-    doc.font('Helvetica').fontSize(6).text('Verifique su producto y cambio antes de retirarse.', { align: 'center', width: 206 });
-    doc.text('Para cualquier reclamo o garantía, presente este ticket.', { align: 'center', width: 206 });
+    this.drawDashedLine(doc);
+    doc.moveDown(0.3);
+
+    // 6. Mensaje de Despedida y Garantía Centrado al Ancho Completo
+    const footerY = doc.y;
+    doc.font('Helvetica-Bold').fontSize(8.5).text('¡GRACIAS POR SU COMPRA!', 10, footerY, {
+      align: 'center',
+      width: 206,
+    });
+
+    doc.moveDown(0.3);
+    doc.font('Helvetica').fontSize(6.5).text('Verifique su producto y cambio antes de retirarse.', 10, doc.y, {
+      align: 'center',
+      width: 206,
+    });
+    doc.moveDown(0.15);
+    doc.text('Para cualquier reclamo o garantía conserve este ticket.', 10, doc.y, {
+      align: 'center',
+      width: 206,
+    });
   }
 
   private renderQuoteTicket(doc: PDFKit.PDFDocument, sale: ISale): void {
     doc.fillColor('#000000', 1.0);
-    doc.font('Helvetica-Bold').fontSize(10).text('COTIZACIÓN / PROFORMA', { align: 'center' });
+    doc.font('Helvetica-Bold').fontSize(10).text('COTIZACIÓN / PROFORMA', 10, doc.y, { align: 'center', width: 206 });
     doc.moveDown(0.2);
-    doc.fontSize(9).text(this.RAZON_SOCIAL, { align: 'center' });
-    doc.font('Helvetica').fontSize(7.5).text(`RUC: ${this.RUC}`, { align: 'center' });
-    doc.fontSize(6.5).text(this.DIRECCION, { align: 'center', width: 206 });
-    doc.text(this.TELEFONO, { align: 'center', width: 206 });
+    doc.fontSize(9).text(this.RAZON_SOCIAL, 10, doc.y, { align: 'center', width: 206 });
+    doc.font('Helvetica').fontSize(7.5).text(`RUC: ${this.RUC}`, 10, doc.y, { align: 'center', width: 206 });
+    doc.fontSize(6.5).text(this.DIRECCION, 10, doc.y, { align: 'center', width: 206 });
+    doc.text(this.TELEFONO, 10, doc.y, { align: 'center', width: 206 });
     doc.moveDown(0.3);
 
     this.drawDashedLine(doc);
 
-    doc.font('Helvetica-Bold').fontSize(8.5).text(`CÓDIGO: ${sale.receiptNumber || 'PROFORMA'}`, { align: 'center' });
+    doc.font('Helvetica-Bold').fontSize(8.5).text(`CÓDIGO: ${sale.receiptNumber || 'PROFORMA'}`, 10, doc.y, { align: 'center', width: 206 });
     doc.moveDown(0.3);
 
     doc.font('Helvetica').fontSize(7);
@@ -158,9 +170,12 @@ export class TicketService {
 
     doc.moveDown(0.2);
     this.renderTotalLine(doc, 'TOTAL ESTIMADO', `S/ ${sale.totalPrice.toFixed(2)}`, true);
-    doc.moveDown(0.6);
+    doc.moveDown(0.4);
 
-    doc.font('Helvetica-Bold').fontSize(6.5).text('CONDICIONES COMERCIALES:', 10, doc.y, { align: 'left' });
+    this.drawDashedLine(doc);
+    doc.moveDown(0.3);
+
+    doc.font('Helvetica-Bold').fontSize(6.5).text('CONDICIONES COMERCIALES:', 10, doc.y, { align: 'left', width: 206 });
     doc.font('Helvetica').fontSize(6);
     doc.text('• Precios y stock sujetos a variación sin previo aviso.', 10, doc.y + 2, { width: 206 });
     doc.text('• Documento informativo no válido como comprobante fiscal SUNAT.', 10, doc.y + 1, { width: 206 });
@@ -175,7 +190,6 @@ export class TicketService {
 
     let currentY = doc.y;
 
-    // Encabezado de Columnas
     doc.font('Helvetica-Bold').fontSize(7);
     doc.text('CANT', colCantX, currentY);
     doc.text('DESCRIPCIÓN', colDescX, currentY);
@@ -184,13 +198,11 @@ export class TicketService {
     currentY += 10;
     doc.y = currentY;
 
-    // Línea continua sutil bajo encabezado
     doc.save().lineWidth(0.5).strokeColor('#CCCCCC');
     doc.moveTo(10, currentY - 2).lineTo(216, currentY - 2).stroke().restore();
 
     doc.font('Helvetica').fontSize(7);
 
-    // Listado de Artículos
     sale.items.forEach((item: any) => {
       currentY = doc.y;
       const lineTotal = (item.price * item.quantity - (item.discount || 0)).toFixed(2);
@@ -203,7 +215,6 @@ export class TicketService {
 
       doc.y += 10;
 
-      // Variante subordinada
       if (item.variantId && item.product?.variants) {
         const variant = item.product.variants.find((v: any) => v._id.toString() === item.variantId.toString());
         if (variant) {
@@ -229,12 +240,14 @@ export class TicketService {
     if (isBig) {
       doc.font('Helvetica-Bold').fontSize(9.5).text(label, 10, y, { width: 110, align: 'left' });
       doc.text(amount, 120, y, { width: 96, align: 'right' });
-      doc.y += 12;
+      doc.y += 13;
     } else {
       doc.font('Helvetica').fontSize(7.5).text(label, 10, y, { width: 110, align: 'left' });
       doc.text(amount, 120, y, { width: 96, align: 'right' });
       doc.y += 10;
     }
+    // Restablece x al margen izquierdo para evitar heredar el desplazamiento
+    doc.x = 10;
   }
 
   private drawDashedLine(doc: PDFKit.PDFDocument): void {
@@ -250,6 +263,7 @@ export class TicketService {
       .undash()
       .restore();
 
+    doc.x = 10;
     doc.moveDown(0.3);
   }
 }
