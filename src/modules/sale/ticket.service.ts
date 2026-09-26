@@ -1,6 +1,12 @@
 /* File: backend/src/modules/sale/ticket.service.ts */
 import PDFDocument from 'pdfkit';
+import sharp from 'sharp';
 import { ISale, SaleStatus } from '../../models/Sale';
+
+interface LogoData {
+  buffer: Buffer;
+  aspectRatio: number;
+}
 
 function formatPeruDateTime(date: Date | string | undefined): string {
   if (!date) return '-';
@@ -30,15 +36,51 @@ function formatPeruDate(date: Date | string | undefined): string {
 
 export class TicketService {
   private readonly RUC = '10725009858';
-  private readonly RAZON_SOCIAL = 'SYC Mobile Perú';
   private readonly DIRECCION = 'Av. Mariscal Benavides 713 - Cañete, Perú';
   private readonly TELEFONO = 'Teléfono: 972 416 683';
+  private readonly LOGO_URL = 'https://www.sycmobile.pe/logonegro.svg';
+
+  private cachedLogo: LogoData | null = null;
+
+  private async getLogoData(): Promise<LogoData | null> {
+    if (this.cachedLogo) return this.cachedLogo;
+    try {
+      const response = await fetch(this.LOGO_URL);
+      if (!response.ok) return null;
+      const svgBuffer = Buffer.from(await response.arrayBuffer());
+
+      // Procesamiento con transparencia pura (sin fondos ni bordes artificiales)
+      const image = sharp(svgBuffer)
+        .ensureAlpha()
+        .png({ compressionLevel: 9, quality: 100 });
+
+      const metadata = await image.metadata();
+      const pngBuffer = await image.toBuffer();
+
+      const width = metadata.width || 100;
+      const height = metadata.height || 100;
+
+      this.cachedLogo = {
+        buffer: pngBuffer,
+        aspectRatio: width / height,
+      };
+      return this.cachedLogo;
+    } catch (error) {
+      console.error('[TicketService] Error cargando logo:', error);
+      return null;
+    }
+  }
 
   async generateTicketBuffer(sale: ISale): Promise<Buffer> {
     const isQuote = sale.isQuote || sale.status === SaleStatus.QUOTE;
+    const logoData = await this.getLogoData();
 
-    const headerHeight = isQuote ? 175 : 170;
-    const footerHeight = isQuote ? 160 : 155;
+    const logoWidth = 65;
+    const logoHeight = logoData ? Math.round(logoWidth / logoData.aspectRatio) : 0;
+    const logoSpacing = logoData ? logoHeight + 8 : 0;
+
+    const headerHeight = (isQuote ? 145 : 140) + logoSpacing;
+    const footerHeight = isQuote ? 155 : 150;
     const itemsLines = sale.items.reduce((acc, item) => acc + (item.variantId ? 2 : 1), 0);
     const tableHeight = 30 + itemsLines * 18;
     const totalHeight = Math.ceil(headerHeight + tableHeight + footerHeight);
@@ -46,7 +88,7 @@ export class TicketService {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({
         size: [226, totalHeight],
-        margins: { top: 8, left: 10, bottom: 8, right: 10 },
+        margins: { top: 10, left: 10, bottom: 10, right: 10 },
       });
 
       const buffers: Buffer[] = [];
@@ -55,33 +97,46 @@ export class TicketService {
       doc.on('error', (err) => reject(err));
 
       if (isQuote) {
-        this.renderQuoteTicket(doc, sale);
+        this.renderQuoteTicket(doc, sale, logoData, logoWidth, logoHeight);
       } else {
-        this.renderSaleTicket(doc, sale);
+        this.renderSaleTicket(doc, sale, logoData, logoWidth, logoHeight);
       }
 
       doc.end();
     });
   }
 
-  private renderSaleTicket(doc: PDFKit.PDFDocument, sale: ISale): void {
-    // 1. Encabezado de Empresa (ancho total: 206)
+  private renderSaleTicket(
+    doc: PDFKit.PDFDocument,
+    sale: ISale,
+    logoData: LogoData | null,
+    logoWidth: number,
+    logoHeight: number
+  ): void {
     doc.fillColor('#000000', 1.0);
-    doc.font('Helvetica-Bold').fontSize(11).text(this.RAZON_SOCIAL, 10, doc.y, { align: 'center', width: 206 });
+
+    // 1. Logo centrado sin bordes
+    if (logoData) {
+      const logoX = 10 + (206 - logoWidth) / 2;
+      doc.image(logoData.buffer, logoX, doc.y, { width: logoWidth, height: logoHeight });
+      doc.y += logoHeight + 6;
+    }
+
+    // 2. Información Fiscal
+    doc.font('Helvetica-Bold').fontSize(8.5).text(`RUC: ${this.RUC}`, 10, doc.y, { align: 'center', width: 206 });
     doc.moveDown(0.2);
-    doc.fontSize(8).text(`RUC: ${this.RUC}`, 10, doc.y, { align: 'center', width: 206 });
     doc.font('Helvetica').fontSize(7).text(this.DIRECCION, 10, doc.y, { align: 'center', width: 206 });
     doc.text(this.TELEFONO, 10, doc.y, { align: 'center', width: 206 });
     doc.moveDown(0.4);
 
     this.drawDashedLine(doc);
 
-    // 2. Título de Comprobante
+    // 3. Comprobante
     const docTitle = sale.receiptType ? sale.receiptType.toUpperCase() : 'TICKET DE VENTA';
     doc.font('Helvetica-Bold').fontSize(9).text(`${docTitle}: ${sale.receiptNumber || '000000'}`, 10, doc.y, { align: 'center', width: 206 });
     doc.moveDown(0.3);
 
-    // 3. Metadatos de la Venta
+    // 4. Metadatos
     doc.font('Helvetica').fontSize(7);
     this.renderKeyValue(doc, 'Fecha y Hora', formatPeruDateTime(sale.createdAt));
     this.renderKeyValue(doc, 'Cajero/Op.', (sale.employee as any)?.nombre || 'Cajero');
@@ -98,11 +153,11 @@ export class TicketService {
     doc.moveDown(0.3);
     this.drawDashedLine(doc);
 
-    // 4. Tabla de Productos
+    // 5. Tabla de Productos
     this.renderItemsTable(doc, sale);
     this.drawDashedLine(doc);
 
-    // 5. Bloque de Totales
+    // 6. Bloque de Totales
     if (sale.totalDiscountAmount > 0) {
       this.renderTotalLine(doc, 'SUBTOTAL', `S/ ${sale.subtotal.toFixed(2)}`, false);
       this.renderTotalLine(doc, 'DESCUENTO', `- S/ ${sale.totalDiscountAmount.toFixed(2)}`, false);
@@ -118,13 +173,11 @@ export class TicketService {
     this.drawDashedLine(doc);
     doc.moveDown(0.3);
 
-    // 6. Mensaje de Despedida y Garantía Centrado al Ancho Completo
-    const footerY = doc.y;
-    doc.font('Helvetica-Bold').fontSize(8.5).text('¡GRACIAS POR SU COMPRA!', 10, footerY, {
+    // 7. Pie de Página
+    doc.font('Helvetica-Bold').fontSize(8.5).text('¡GRACIAS POR SU COMPRA!', 10, doc.y, {
       align: 'center',
       width: 206,
     });
-
     doc.moveDown(0.3);
     doc.font('Helvetica').fontSize(6.5).text('Verifique su producto y cambio antes de retirarse.', 10, doc.y, {
       align: 'center',
@@ -137,11 +190,23 @@ export class TicketService {
     });
   }
 
-  private renderQuoteTicket(doc: PDFKit.PDFDocument, sale: ISale): void {
+  private renderQuoteTicket(
+    doc: PDFKit.PDFDocument,
+    sale: ISale,
+    logoData: LogoData | null,
+    logoWidth: number,
+    logoHeight: number
+  ): void {
     doc.fillColor('#000000', 1.0);
+
+    if (logoData) {
+      const logoX = 10 + (206 - logoWidth) / 2;
+      doc.image(logoData.buffer, logoX, doc.y, { width: logoWidth, height: logoHeight });
+      doc.y += logoHeight + 6;
+    }
+
     doc.font('Helvetica-Bold').fontSize(10).text('COTIZACIÓN / PROFORMA', 10, doc.y, { align: 'center', width: 206 });
     doc.moveDown(0.2);
-    doc.fontSize(9).text(this.RAZON_SOCIAL, 10, doc.y, { align: 'center', width: 206 });
     doc.font('Helvetica').fontSize(7.5).text(`RUC: ${this.RUC}`, 10, doc.y, { align: 'center', width: 206 });
     doc.fontSize(6.5).text(this.DIRECCION, 10, doc.y, { align: 'center', width: 206 });
     doc.text(this.TELEFONO, 10, doc.y, { align: 'center', width: 206 });
@@ -246,7 +311,6 @@ export class TicketService {
       doc.text(amount, 120, y, { width: 96, align: 'right' });
       doc.y += 10;
     }
-    // Restablece x al margen izquierdo para evitar heredar el desplazamiento
     doc.x = 10;
   }
 
