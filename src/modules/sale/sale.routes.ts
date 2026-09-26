@@ -5,6 +5,7 @@ import {
     createQuote,
     convertQuote,
     getQuotes,
+    downloadPdf,
     downloadTicket,
     refundSale,
     exportSalesReport,
@@ -18,6 +19,7 @@ router.post('/', processSale);           // Crear venta real
 router.get('/', getSales);               // <-- Faltaba esta ruta para el listado/filtros
 router.get('/export', exportSalesReport); // Reporte CSV
 router.get('/:id/ticket', downloadTicket); // PDF
+router.get('/:id/pdf', downloadPdf);       // <-- A4 Estándar (http://localhost:3000/api/sales/:id/pdf)
 router.get('/:id', getById);
 // --- OPERACIONES DE PROFORMAS ---
 router.post('/quote', createQuote);

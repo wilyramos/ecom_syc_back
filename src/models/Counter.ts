@@ -2,7 +2,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 interface ICounter extends Document {
-    name: string; // Ejemplo: "BOLETA", "FACTURA", "TICKET"
+    name: string;
     seq: number;
 }
 
