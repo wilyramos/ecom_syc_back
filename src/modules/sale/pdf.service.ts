@@ -188,18 +188,17 @@ export class PdfService {
       doc.text('TOTAL A PAGAR:', 390, totalsY + 7);
       doc.text(`S/ ${sale.totalPrice.toFixed(2)}`, 470, totalsY + 7, { width: 80, align: 'right' });
 
-      // --- 5. NOTAS Y CONDICIONES ---
+      // --- 5. notas generales y gracias ---
       doc.fillColor('#000000');
       const footerY = totalsY + 45;
-      doc.font('Helvetica-Bold').fontSize(8).text('OBSERVACIONES / CONDICIONES:', 40, footerY);
+      doc.font('Helvetica-Bold').fontSize(8).text('sycmobile.pe', 40, footerY);
       doc.font('Helvetica').fontSize(7.5);
 
       if (isQuote) {
         doc.text('• Precios expresados en Soles (PEN) con vigencia sujeta a stock en tienda.', 40, footerY + 12);
-        doc.text('• Documento informativo que no constituye comprobante de pago electrónico válido ante SUNAT.', 40, footerY + 24);
+        doc.text('• Documento informativo.', 40, footerY + 24);
       } else {
-        doc.text('• Todo cambio de producto se efectúa dentro de las 48 horas presentando el comprobante original.', 40, footerY + 12);
-        doc.text('• Los equipos celulares y accesorios cuentan con garantía según la póliza de la marca.', 40, footerY + 24);
+        doc.text('• Gracias por su compra.', 40, footerY + 12);
       }
 
       doc.end();
