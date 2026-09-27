@@ -54,6 +54,7 @@ app.get('/', (req, res) => {
 
 setupSwagger(app)
 
+
 // Version 2.0: Refactor to use controllers and services for products and sales
 app.use('/api/products/v2', productRouterV2)
 app.use('/api/sales/v2', saleRouterV2)
