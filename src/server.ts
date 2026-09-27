@@ -1,5 +1,3 @@
-//File: src/server.ts
-
 import express from 'express'
 import morgan from 'morgan'
 import connectDB from './config/db'
@@ -21,7 +19,6 @@ import cors from 'cors'
 import { globalErrorHandler } from './middleware/error.middleware'
 import lineRouter from './routes/line.router'
 
-
 // v2
 import productRouterV2 from './modules/product/product.routes'
 import saleRouterV2 from './modules/sale/sale.routes'
@@ -39,7 +36,6 @@ const app = express()
 connectDB()
 
 app.use(morgan('dev'))
-app.use(express.json())
 
 // Cors
 app.use(cors({
@@ -48,12 +44,17 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }))
 
+// 1. DECLARAR WEBHOOKS ANTES DE EXPRESS.JSON()
+app.use('/api/webhooks', express.urlencoded({ extended: true }), webhookRouter);
+
+// 2. APLICAR PARSEO JSON AL RESTO DE RUTAS
+app.use(express.json())
+
 app.get('/', (req, res) => {
     res.send('API is running...')
 })
 
 setupSwagger(app)
-
 
 // Version 2.0: Refactor to use controllers and services for products and sales
 app.use('/api/products/v2', productRouterV2)
@@ -74,18 +75,10 @@ app.use('/api/orders', orderRouter)
 app.use('/api/checkout', checkoutRouter)
 app.use('/api/sales', saleRouter)
 app.use('/api/lines', lineRouter)
-app.use('/api/webhooks',
-    express.urlencoded({ extended: true }),
-    webhookRouter
-),
-    app.use('/api/purchases', purchaseRouter)
-
-//
+app.use('/api/purchases', purchaseRouter);
 
 
 // Middleware global for error handling 
 app.use(globalErrorHandler);
-
-
 
 export default app
