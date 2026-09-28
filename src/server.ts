@@ -78,6 +78,7 @@ app.use('/api/lines', lineRouter)
 app.use('/api/purchases', purchaseRouter);
 
 
+
 // Middleware global for error handling 
 app.use(globalErrorHandler);
 
