@@ -8,6 +8,13 @@ interface LogoData {
   aspectRatio: number;
 }
 
+const TICKET_WIDTH = 226;
+const TICKET_MARGINS = { top: 0, left: 8, bottom: 0, right: 8 };
+const CONTENT_WIDTH = 210;
+const KV_LINE_HEIGHT = 7;      // Interlineado de clave-valor (antes 7.5)
+const DASHED_LINE_GAP = 1.5;   // Espacio después de la línea punteada (antes 3)
+const BOTTOM_PADDING = 4;      // Colchón para que el último renglón no se corte
+
 function formatPeruDateTime(date: Date | string | undefined): string {
   if (!date) return '-';
   const d = new Date(date);
@@ -74,21 +81,33 @@ export class TicketService {
     const isQuote = sale.isQuote || sale.status === SaleStatus.QUOTE;
     const logoData = await this.getLogoData();
 
-    const logoWidth = 55; // Reducido el tamaño del logo para ahorrar espacio
+    const logoWidth = 55;
     const logoHeight = logoData ? Math.round(logoWidth / logoData.aspectRatio) : 0;
-    const logoSpacing = logoData ? logoHeight + 4 : 0; // Menor margen bajo el logo
 
-    // Alturas ajustadas para reducir el espacio superior e inferior
-    const headerHeight = (isQuote ? 95 : 90) + logoSpacing; 
-    const footerHeight = isQuote ? 95 : 75; 
-    const itemsLines = sale.items.reduce((acc, item) => acc + (item.variantId ? 1.7 : 1), 0);
-    const tableHeight = 20 + itemsLines * 12; // Altura de fila reducida
-    const totalHeight = Math.ceil(headerHeight + tableHeight + footerHeight);
+    const renderContent = (doc: PDFKit.PDFDocument) => {
+      if (isQuote) {
+        this.renderQuoteTicket(doc, sale, logoData, logoWidth, logoHeight);
+      } else {
+        this.renderSaleTicket(doc, sale, logoData, logoWidth, logoHeight);
+      }
+    };
+
+    // Pasada 1: medir la altura real del contenido
+    const measureDoc = new PDFDocument({
+      size: [TICKET_WIDTH, 3000],
+      margins: TICKET_MARGINS,
+    });
+    renderContent(measureDoc);
+    const contentHeight = measureDoc.y;
+    measureDoc.end();
+
+    // Pasada 2: generar el PDF con la altura exacta
+    const totalHeight = Math.ceil(contentHeight + BOTTOM_PADDING);
 
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({
-        size: [226, totalHeight],
-        margins: { top: 2, left: 8, bottom: 2, right: 8 }, // Márgenes mínimos (casi cero top/bottom)
+        size: [TICKET_WIDTH, totalHeight],
+        margins: TICKET_MARGINS,
       });
 
       const buffers: Buffer[] = [];
@@ -96,12 +115,7 @@ export class TicketService {
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', (err) => reject(err));
 
-      if (isQuote) {
-        this.renderQuoteTicket(doc, sale, logoData, logoWidth, logoHeight);
-      } else {
-        this.renderSaleTicket(doc, sale, logoData, logoWidth, logoHeight);
-      }
-
+      renderContent(doc);
       doc.end();
     });
   }
@@ -117,46 +131,42 @@ export class TicketService {
 
     // 1. Logo
     if (logoData) {
-      const logoX = 8 + (210 - logoWidth) / 2;
+      const logoX = 8 + (CONTENT_WIDTH - logoWidth) / 2;
       doc.image(logoData.buffer, logoX, doc.y, { width: logoWidth, height: logoHeight });
-      doc.y += logoHeight + 2; 
+      doc.y += logoHeight + 2;
     }
 
-    // 2. Información Fiscal
-    doc.font('Helvetica-Bold').fontSize(7.5).text(`RUC: ${this.RUC}`, 8, doc.y, { align: 'center', width: 210 });
-    doc.font('Helvetica').fontSize(6).text(this.DIRECCION, 8, doc.y, { align: 'center', width: 210 });
-    doc.text(this.TELEFONO, 8, doc.y, { align: 'center', width: 210 });
+    // 2. Información fiscal
+    doc.font('Helvetica-Bold').fontSize(7.5).text(`RUC: ${this.RUC}`, 8, doc.y, { align: 'center', width: CONTENT_WIDTH });
+    doc.font('Helvetica').fontSize(6).text(this.DIRECCION, 8, doc.y, { align: 'center', width: CONTENT_WIDTH });
+    doc.text(this.TELEFONO, 8, doc.y, { align: 'center', width: CONTENT_WIDTH });
     doc.y += 2;
 
     this.drawDashedLine(doc);
 
     // 3. Comprobante
     const docTitle = sale.receiptType ? sale.receiptType.toUpperCase() : 'TICKET';
-    doc.font('Helvetica-Bold').fontSize(8).text(`${docTitle}: ${sale.receiptNumber || '000000'}`, 8, doc.y, { align: 'center', width: 210 });
+    doc.font('Helvetica-Bold').fontSize(8).text(`${docTitle}: ${sale.receiptNumber || '000000'}`, 8, doc.y, { align: 'center', width: CONTENT_WIDTH });
     doc.y += 2;
 
-    // 4. Metadatos (condensados)
-    doc.font('Helvetica').fontSize(6.5);
+    // 4. Metadatos compactos
     this.renderKeyValue(doc, 'Fecha/Hora', formatPeruDateTime(sale.createdAt));
     this.renderKeyValue(doc, 'Cajero', (sale.employee as any)?.nombre || 'Cajero');
     this.renderKeyValue(doc, 'Pago', sale.paymentMethod || 'EFECTIVO');
-
-    const clientName = sale.customerSnapshot?.nombre || 'CLIENTES VARIOS';
-    this.renderKeyValue(doc, 'Cliente', clientName);
+    this.renderKeyValue(doc, 'Cliente', sale.customerSnapshot?.nombre || 'CLIENTES VARIOS');
 
     if (sale.customerSnapshot?.numeroDocumento) {
       const docType = sale.customerSnapshot.tipoDocumento || 'DOC';
       this.renderKeyValue(doc, docType, sale.customerSnapshot.numeroDocumento);
     }
 
-    doc.y += 2;
     this.drawDashedLine(doc);
 
-    // 5. Tabla de Productos
+    // 5. Tabla de productos
     this.renderItemsTable(doc, sale);
     this.drawDashedLine(doc);
 
-    // 6. Bloque de Totales
+    // 6. Totales
     if (sale.totalDiscountAmount > 0) {
       this.renderTotalLine(doc, 'SUBTOTAL', `S/ ${sale.subtotal.toFixed(2)}`, false);
       this.renderTotalLine(doc, 'DCTO', `- S/ ${sale.totalDiscountAmount.toFixed(2)}`, false);
@@ -167,14 +177,14 @@ export class TicketService {
 
     doc.y += 1;
     this.renderTotalLine(doc, 'TOTAL', `S/ ${sale.totalPrice.toFixed(2)}`, true);
-    
+
     doc.y += 2;
     this.drawDashedLine(doc);
 
-    // 7. Pie de Página
-    doc.font('Helvetica-Bold').fontSize(7.5).text('¡GRACIAS POR SU COMPRA!', 8, doc.y, { align: 'center', width: 210 });
-    doc.font('Helvetica').fontSize(6).text('Verifique su producto y cambio.', 8, doc.y, { align: 'center', width: 210 });
-    doc.text('Para reclamos/garantía conserve este ticket.', 8, doc.y, { align: 'center', width: 210 });
+    // 7. Pie de página
+    doc.font('Helvetica-Bold').fontSize(7.5).text('¡GRACIAS POR SU COMPRA!', 8, doc.y, { align: 'center', width: CONTENT_WIDTH });
+    doc.font('Helvetica').fontSize(6).text('Verifique su producto y cambio.', 8, doc.y, { align: 'center', width: CONTENT_WIDTH });
+    doc.text('Para reclamos/garantía conserve este ticket.', 8, doc.y, { align: 'center', width: CONTENT_WIDTH });
   }
 
   private renderQuoteTicket(
@@ -187,22 +197,21 @@ export class TicketService {
     doc.fillColor('#000000', 1.0);
 
     if (logoData) {
-      const logoX = 8 + (210 - logoWidth) / 2;
+      const logoX = 8 + (CONTENT_WIDTH - logoWidth) / 2;
       doc.image(logoData.buffer, logoX, doc.y, { width: logoWidth, height: logoHeight });
       doc.y += logoHeight + 2;
     }
 
-    doc.font('Helvetica-Bold').fontSize(8.5).text('COTIZACIÓN', 8, doc.y, { align: 'center', width: 210 });
-    doc.font('Helvetica').fontSize(6).text(`RUC: ${this.RUC} | ${this.TELEFONO}`, 8, doc.y, { align: 'center', width: 210 });
-    doc.text(this.DIRECCION, 8, doc.y, { align: 'center', width: 210 });
+    doc.font('Helvetica-Bold').fontSize(8.5).text('COTIZACIÓN', 8, doc.y, { align: 'center', width: CONTENT_WIDTH });
+    doc.font('Helvetica').fontSize(6).text(`RUC: ${this.RUC} | ${this.TELEFONO}`, 8, doc.y, { align: 'center', width: CONTENT_WIDTH });
+    doc.text(this.DIRECCION, 8, doc.y, { align: 'center', width: CONTENT_WIDTH });
     doc.y += 2;
 
     this.drawDashedLine(doc);
 
-    doc.font('Helvetica-Bold').fontSize(8).text(`CÓDIGO: ${sale.receiptNumber || 'PROFORMA'}`, 8, doc.y, { align: 'center', width: 210 });
+    doc.font('Helvetica-Bold').fontSize(8).text(`CÓDIGO: ${sale.receiptNumber || 'PROFORMA'}`, 8, doc.y, { align: 'center', width: CONTENT_WIDTH });
     doc.y += 2;
 
-    doc.font('Helvetica').fontSize(6.5);
     this.renderKeyValue(doc, 'Fecha', formatPeruDateTime(sale.createdAt));
     if (sale.quoteExpirationDate) {
       this.renderKeyValue(doc, 'Válido Hasta', formatPeruDate(sale.quoteExpirationDate));
@@ -213,22 +222,21 @@ export class TicketService {
       this.renderKeyValue(doc, 'Doc.', sale.customerSnapshot.numeroDocumento);
     }
 
-    doc.y += 2;
     this.drawDashedLine(doc);
     this.renderItemsTable(doc, sale);
     this.drawDashedLine(doc);
 
     doc.y += 1;
     this.renderTotalLine(doc, 'TOTAL EST.', `S/ ${sale.totalPrice.toFixed(2)}`, true);
-    
+
     doc.y += 2;
     this.drawDashedLine(doc);
 
-    doc.font('Helvetica-Bold').fontSize(6).text('CONDICIONES:', 8, doc.y, { align: 'left', width: 210 });
+    doc.font('Helvetica-Bold').fontSize(6).text('CONDICIONES:', 8, doc.y, { align: 'left', width: CONTENT_WIDTH });
     doc.font('Helvetica').fontSize(5.5);
-    doc.text('• Precios/stock sujetos a variación sin aviso.', 8, doc.y, { width: 210 });
-    doc.text('• No válido como comprobante fiscal.', 8, doc.y, { width: 210 });
-    doc.text('• Reserva confirmada tras boleta/factura.', 8, doc.y, { width: 210 });
+    doc.text('• Precios/stock sujetos a variación sin aviso.', 8, doc.y, { width: CONTENT_WIDTH });
+    doc.text('• No válido como comprobante fiscal.', 8, doc.y, { width: CONTENT_WIDTH });
+    doc.text('• Reserva confirmada tras boleta/factura.', 8, doc.y, { width: CONTENT_WIDTH });
   }
 
   private renderItemsTable(doc: PDFKit.PDFDocument, sale: ISale): void {
@@ -247,7 +255,7 @@ export class TicketService {
     currentY += 8;
     doc.y = currentY;
 
-    // Línea separadora del encabezado tabla más sutil
+    // Línea separadora del encabezado
     doc.save().lineWidth(0.3).strokeColor('#EEEEEE');
     doc.moveTo(8, currentY - 1).lineTo(218, currentY - 1).stroke().restore();
 
@@ -263,7 +271,7 @@ export class TicketService {
       doc.text(name, colDescX, currentY, { width: 130 });
       doc.text(`S/ ${lineTotal}`, colTotalX, currentY, { width: colTotalWidth, align: 'right' });
 
-      doc.y += 8;
+      doc.y = currentY + 8;
 
       if (item.variantId && item.product?.variants) {
         const variant = item.product.variants.find((v: any) => v._id.toString() === item.variantId.toString());
@@ -275,14 +283,18 @@ export class TicketService {
       }
     });
 
+    doc.x = 8;
     doc.y += 2;
   }
 
   private renderKeyValue(doc: PDFKit.PDFDocument, label: string, value: string): void {
     const y = doc.y;
-    doc.font('Helvetica-Bold').text(`${label}:`, 8, y, { width: 45 });
-    doc.font('Helvetica').text(value, 55, y, { width: 163, align: 'left' });
-    doc.y += 7.5; // Espaciado entre líneas clave-valor reducido
+
+    doc.font('Helvetica-Bold').fontSize(6.5).text(`${label}:`, 8, y, { width: 45, lineGap: 0 });
+    doc.font('Helvetica').fontSize(6.5).text(value, 55, y, { width: 163, align: 'left', lineGap: 0 });
+
+    doc.x = 8;
+    doc.y = y + KV_LINE_HEIGHT;
   }
 
   private renderTotalLine(doc: PDFKit.PDFDocument, label: string, amount: string, isBig: boolean): void {
@@ -290,11 +302,11 @@ export class TicketService {
     if (isBig) {
       doc.font('Helvetica-Bold').fontSize(8.5).text(label, 8, y, { width: 110, align: 'left' });
       doc.text(amount, 120, y, { width: 98, align: 'right' });
-      doc.y += 10;
+      doc.y = y + 10;
     } else {
       doc.font('Helvetica').fontSize(7).text(label, 8, y, { width: 110, align: 'left' });
       doc.text(amount, 120, y, { width: 98, align: 'right' });
-      doc.y += 8;
+      doc.y = y + 8;
     }
     doc.x = 8;
   }
@@ -313,6 +325,6 @@ export class TicketService {
       .restore();
 
     doc.x = 8;
-    doc.y += 3;
+    doc.y = y + DASHED_LINE_GAP;
   }
 }
