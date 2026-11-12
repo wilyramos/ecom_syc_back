@@ -96,14 +96,14 @@ export class TicketService {
     const measureDoc = new PDFDocument({
       size: [TICKET_WIDTH, 3000],
       margins: TICKET_MARGINS,
+      layout: 'portrait',
     });
     renderContent(measureDoc);
     const contentHeight = measureDoc.y;
     measureDoc.end();
 
     // Pasada 2: generar el PDF con la altura exacta
-    const totalHeight = Math.ceil(contentHeight + BOTTOM_PADDING);
-
+const totalHeight = Math.max(Math.ceil(contentHeight + BOTTOM_PADDING), TICKET_WIDTH + 10);
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({
         size: [TICKET_WIDTH, totalHeight],
